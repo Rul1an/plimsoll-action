@@ -374,6 +374,36 @@ def build_review(before_path, after_path, before, after, policy, require_coverag
                     "evidence should not carry credentials, redact it at capture"
                 )
 
+    # Capture-side redaction receipt (ADR-034): if the runner already removed secrets at capture,
+    # surface that as a positive, value-free note instead of silence; warn loudly if redaction was
+    # disabled, since then the evidence may still carry raw credentials.
+    redaction = []
+    for side, surf in (("before", before), ("after", after)):
+        r = (surf.get("observation_health") or {}).get("redaction")
+        if not r:
+            continue
+        mode = r.get("mode")
+        redaction.append(
+            {
+                "side": side,
+                "mode": mode,
+                "redacted_count": r.get("redacted_count", 0),
+                "key_scope": r.get("key_scope"),
+                "key_id": r.get("key_id"),
+            }
+        )
+        if mode == "disabled_unsafe":
+            warnings.append(
+                f"redaction was disabled at capture on the {side} surface (mode=disabled_unsafe); "
+                "the evidence may contain raw credentials"
+            )
+        elif r.get("redacted_count"):
+            rules = ", ".join(sorted(r.get("by_rule") or {})) or "unspecified"
+            warnings.append(
+                f"{r['redacted_count']} value(s) were redacted at capture on the {side} surface "
+                f"(rules: {rules}); secrets were removed before the bundle was hashed"
+            )
+
     review = {
         "schema": "assay.product.evidence_review.v1",
         "before_evidence": {"path": before_path, "digest": file_digest(before_path)},
@@ -384,6 +414,7 @@ def build_review(before_path, after_path, before, after, policy, require_coverag
         "diff": d,
         "findings_requiring_approval": f,
         "possible_secrets": possible_secrets,
+        "redaction": redaction,
         "warnings": warnings,
         "decision": decision,
     }
