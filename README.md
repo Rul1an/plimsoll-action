@@ -52,6 +52,10 @@ Runs on any repo with no token, from the open review engine in this repo:
 - coverage honesty, fail-closed: a no-diff run is only auto-cleared for surfaces actually observed. If a
   relevant surface (say the network layer) was not observed, the release is held as
   `inconclusive_observation_gap`, not passed quietly. "Saw nothing" is never read as "did not look".
+- evidence hygiene: if a recorded surface value looks like a secret (provider tokens, PEM private keys,
+  JWTs, bearer tokens, `key=value` credentials), the review warns and emits a `PLIMSOLL-POSSIBLE-SECRET`
+  finding so you can redact it at capture. It is value-free (it never echoes the matched value) and
+  advisory, not a gate.
 
 This is the whole review for one repo, not a teaser.
 
