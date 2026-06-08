@@ -1,5 +1,5 @@
 name: "Plimsoll: agent release review"
-description: "Review what an AI agent release changed at runtime (files, network, MCP tools) between two releases, gate the PR, and report findings in code scanning. For AI platform and security teams."
+description: "Review what an AI agent release changed at runtime (incl. MCP tools), gate the PR, and report findings to code scanning."
 author: "Plimsoll"
 branding:
   icon: "shield"
