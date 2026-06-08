@@ -48,8 +48,10 @@ Runs on any repo with no token, from the open review engine in this repo:
 - a sticky review comment on the PR and a job summary,
 - SARIF uploaded to code scanning, so findings show in the Security tab and PR annotations,
 - a configurable gate: `fail-on: pending` holds the release until a human approves new capability;
-  `blocked` fails only when coverage was insufficient to certify; `never` reports without failing,
-- coverage honesty: a release the run could not observe well enough is held, not passed quietly.
+  `blocked` fails only on a coverage hold; `never` reports without failing,
+- coverage honesty, fail-closed: a no-diff run is only auto-cleared for surfaces actually observed. If a
+  relevant surface (say the network layer) was not observed, the release is held as
+  `inconclusive_observation_gap`, not passed quietly. "Saw nothing" is never read as "did not look".
 
 This is the whole review for one repo, not a teaser.
 

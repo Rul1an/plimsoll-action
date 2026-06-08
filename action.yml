@@ -1,5 +1,5 @@
-name: "Plimsoll: agent release review"
-description: "Review what an AI agent release changed at runtime (incl. MCP tools), gate the PR, and report findings to code scanning."
+name: "Plimsoll release review"
+description: "Review what an agent release's runtime capability changed (files, network, MCP tools), gate the PR, and surface findings in code scanning."
 author: "Plimsoll"
 branding:
   icon: "shield"
@@ -25,7 +25,7 @@ inputs:
     required: false
     default: "true"
   fail-on:
-    description: "Gate level: 'pending' (fail on pending or blocked, default), 'blocked' (fail only when coverage blocks), or 'never'."
+    description: "Gate level: 'pending' (default; fail on anything not auto-cleared, including inconclusive coverage gaps), 'blocked' (fail only on a coverage hold: blocked or inconclusive), or 'never'."
     required: false
     default: "pending"
   comment:
@@ -51,7 +51,7 @@ inputs:
 
 outputs:
   decision:
-    description: "The review decision: auto_clear_no_new_capability | pending | blocked_observation_insufficient."
+    description: "The review decision: auto_clear_no_new_capability | pending | inconclusive_observation_gap | blocked_observation_insufficient."
     value: ${{ steps.review.outputs.decision }}
   findings:
     description: "Number of capabilities requiring approval."
@@ -185,7 +185,10 @@ runs:
         case "$FAIL_ON" in
           never) exit 0 ;;
           blocked)
-            [ "$DECISION" = "blocked_observation_insufficient" ] && { echo "::error::release blocked: observation coverage insufficient"; exit 1; } || exit 0 ;;
+            case "$DECISION" in
+              blocked_observation_insufficient|inconclusive_observation_gap) echo "::error::release held: observation insufficient to certify (decision=$DECISION)"; exit 1 ;;
+              *) exit 0 ;;
+            esac ;;
           pending|*)
             case "$DECISION" in
               auto_clear_no_new_capability) exit 0 ;;
