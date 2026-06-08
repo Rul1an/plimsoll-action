@@ -41,6 +41,12 @@ class SarifTest(unittest.TestCase):
         ids = [r["ruleId"] for r in doc["runs"][0]["results"]]
         self.assertIn("PLIMSOLL-COVERAGE-INSUFFICIENT", ids)
 
+    def test_inconclusive_gap_is_also_a_coverage_result(self):
+        # the gate treats inconclusive as a coverage hold, so SARIF must surface it too
+        doc = review_to_sarif(_review("inconclusive_observation_gap", []))
+        ids = [r["ruleId"] for r in doc["runs"][0]["results"]]
+        self.assertIn("PLIMSOLL-COVERAGE-INSUFFICIENT", ids)
+
     def test_security_severity_present_on_rules(self):
         findings = [{"kind": "network", "item": "x:443", "reason": "r"}]
         doc = review_to_sarif(_review("pending", findings))

@@ -89,6 +89,9 @@ def main(argv=None):
         "observation_health": {
             "kernel_layer": "present" if events > 0 else "absent",
             "openat_events_seen": events,
+            # the monitor watches connect; if egress was actually observed, report it so the review
+            # does not read this surface as an unobserved network layer (R7 / inconclusive gap).
+            **({"network_protocol_coverage": "connect_only"} if net else {}),
         },
     }
     with open(args.out, "w") as f:
