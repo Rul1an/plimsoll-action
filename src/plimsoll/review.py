@@ -32,6 +32,8 @@ import os
 import sys
 import tarfile
 
+from plimsoll.secrets import scan_surface
+
 FIELDS = [
     ("filesystem_paths", "filesystem"),
     ("network_endpoints", "network"),
@@ -340,6 +342,21 @@ def build_review(before_path, after_path, before, after, policy, require_coverag
             "absence of an endpoint is not proof it was not contacted"
         )
 
+    # Evidence hygiene: a recorded surface should not carry secrets. Heuristic, value-free, and
+    # non-gating (warn, point at redaction at capture). Dedup by (field, rule) across both surfaces.
+    possible_secrets = []
+    _seen_secret = set()
+    for side, surf in (("before", before), ("after", after)):
+        for h in scan_surface(surf):
+            k = (h["field"], h["rule"])
+            if k not in _seen_secret:
+                _seen_secret.add(k)
+                possible_secrets.append({**h, "side": side})
+                warnings.append(
+                    f"possible secret in a recorded {h['field']} value (looks like {h['rule']}); "
+                    "evidence should not carry credentials, redact it at capture"
+                )
+
     review = {
         "schema": "assay.product.evidence_review.v1",
         "before_evidence": {"path": before_path, "digest": file_digest(before_path)},
@@ -349,6 +366,7 @@ def build_review(before_path, after_path, before, after, policy, require_coverag
         "scenario": scenario_comparability(before, after),
         "diff": d,
         "findings_requiring_approval": f,
+        "possible_secrets": possible_secrets,
         "warnings": warnings,
         "decision": decision,
     }

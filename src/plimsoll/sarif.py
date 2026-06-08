@@ -32,6 +32,28 @@ _COVERAGE_RULE = (
     "7.0",
     "Observation coverage insufficient to certify the release",
 )
+_SECRET_RULE_ID = "PLIMSOLL-POSSIBLE-SECRET"
+
+
+def _secret_rule():
+    return {
+        "id": _SECRET_RULE_ID,
+        "name": _SECRET_RULE_ID.replace("-", ""),
+        "shortDescription": {"text": "A recorded capability value looks like a secret"},
+        "fullDescription": {
+            "text": (
+                "A recorded surface value (a path, endpoint, process argv, or tool name) matched "
+                "a credential shape. Evidence should not carry secrets: this is both a leak in "
+                "the artifact and a sign the capture was not redacted at source. Heuristic, "
+                "value-free, and advisory (not a gate) since shape matching can have false hits."
+            )
+        },
+        "defaultConfiguration": {"level": "warning"},
+        "properties": {
+            "security-severity": "6.0",
+            "tags": ["plimsoll", "evidence-hygiene", "secret"],
+        },
+    }
 
 
 def _fingerprint(review_id: str, kind: str, item: str) -> str:
@@ -115,7 +137,37 @@ def review_to_sarif(review: dict, surface_uri: str = "capability-surface.json") 
             }
         )
 
+    secret_hits = review.get("possible_secrets", [])
+    for h in secret_hits:
+        field = h.get("field", "")
+        rule_name = h.get("rule", "")
+        results.append(
+            {
+                "ruleId": _SECRET_RULE_ID,
+                "level": "warning",
+                "message": {
+                    "text": (
+                        f"possible secret in a recorded {field} value (looks like {rule_name}); "
+                        "evidence should not carry credentials, redact it at capture"
+                    )
+                },
+                "partialFingerprints": {
+                    "plimsollFinding": _fingerprint(review_id, f"secret:{field}", rule_name)
+                },
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": surface_uri},
+                            "region": {"startLine": 1},
+                        }
+                    }
+                ],
+            }
+        )
+
     rules = [_rule(*v) for v in used_rule_ids.values()]
+    if secret_hits:
+        rules.append(_secret_rule())
 
     return {
         "$schema": SARIF_SCHEMA,

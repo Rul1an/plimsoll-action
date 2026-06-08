@@ -27,7 +27,7 @@ There are two actions in this family and they do different jobs at different run
 | Input | evidence bundles from agent runs (`.tar.gz`) | two capability surfaces: previous release and new |
 | Verbs | verify, lint, diff vs a baseline, compliance packs, store push, attest, coverage badge | diff capability, apply a review policy, decide approve/hold, gate the release |
 | Question | is this run's evidence valid and complete, and does it pass these rules? | what runtime capability changed between these two releases, and should a human approve it before it ships? |
-| SARIF | lint findings on the bundle (`ASSAY-*`) | capability-change findings (`PLIMSOLL-*`) plus an insufficient-coverage result |
+| SARIF | lint findings on the bundle (`ASSAY-*`) | capability-change findings (`PLIMSOLL-*`), an insufficient-coverage result, and a value-free `PLIMSOLL-POSSIBLE-SECRET` warning when a recorded surface value looks like a credential |
 | Layer | the open evidence engine (observe and verify) | the review and decision layer (review and decide) |
 
 They compose rather than compete. assay verifies the evidence is trustworthy and complete; Plimsoll
