@@ -57,7 +57,28 @@ class CoverageBySurfaceTest(unittest.TestCase):
             coverage_by_surface({"observation_health": absent})["network"], "insufficient"
         )
 
-    def test_real_assay_surface_fixture_is_fully_observed(self):
+    def test_tools_gated_on_policy_layer(self):
+        # tools ride the policy/decision layer (where mcp_tools come from), not the kernel.
+        kernel_only = {"kernel_layer": "complete", "policy_layer": "absent"}
+        self.assertEqual(
+            coverage_by_surface({"observation_health": kernel_only})["tools"], "insufficient"
+        )
+        with_policy = {"kernel_layer": "complete", "policy_layer": "present"}
+        self.assertEqual(
+            coverage_by_surface({"observation_health": with_policy})["tools"], "sufficient"
+        )
+
+    def test_tools_falls_back_to_base_when_policy_signal_missing(self):
+        # legacy / non-assay inputs that carry no policy_layer field keep the prior behaviour
+        no_signal = {"kernel_layer": "complete"}
+        self.assertEqual(
+            coverage_by_surface({"observation_health": no_signal})["tools"], "sufficient"
+        )
+
+    def test_real_assay_surface_fixture_observes_kernel_and_network_not_tools(self):
+        # This live fixture is a kernel-capture run (kernel_layer=complete, network connect_only)
+        # with NO MCP policy layer (policy_layer=absent). So fs/process/network are observed, but
+        # the tool layer was not: we must not certify "no new tool" from a run that never saw them.
         import json as _json
         import os as _os
 
@@ -67,9 +88,10 @@ class CoverageBySurfaceTest(unittest.TestCase):
         with open(p) as f:
             surface = _json.load(f)
         cov = coverage_by_surface(surface)
-        self.assertEqual(
-            cov, {k: "sufficient" for k in ("filesystem", "processes", "tools", "network")}
-        )
+        self.assertEqual(cov["filesystem"], "sufficient")
+        self.assertEqual(cov["processes"], "sufficient")
+        self.assertEqual(cov["network"], "sufficient")
+        self.assertEqual(cov["tools"], "insufficient")
 
 
 class StrictGateTest(unittest.TestCase):
