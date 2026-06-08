@@ -15,7 +15,7 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # pin to SHA in production
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       # You bring two capability surfaces: the previous release and this one. They come from assay
       # (kernel-observed) or any producer of the {fs,net,tools,procs} shape. Capturing them needs the
@@ -26,7 +26,7 @@ jobs:
       #   run: ./scripts/capture-or-download-surfaces.sh   # produces before.json and after.json
 
       - name: Plimsoll review
-        uses: Rul1an/plimsoll-action@v1 # pin to SHA in production
+        uses: Rul1an/plimsoll-action@61502036adcdc4fa9fd885f9744a6340cf807115 # v1.0.0
         with:
           before: before.json
           after: after.json

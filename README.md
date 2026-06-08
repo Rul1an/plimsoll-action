@@ -1,5 +1,7 @@
 # Plimsoll release review (GitHub Action)
 
+[![Marketplace](https://img.shields.io/badge/GitHub%20Marketplace-Plimsoll%20release%20review-blue?logo=github)](https://github.com/marketplace/actions/plimsoll-agent-release-review)
+
 **See what an AI agent release changed at runtime, review it, and gate the PR.** On every pull request,
 Plimsoll diffs what your agent can actually do (filesystem, network, MCP tools) between the previous
 release and the new one, decides whether a human should approve the change, posts a review on the PR,
