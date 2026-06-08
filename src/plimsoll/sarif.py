@@ -85,19 +85,24 @@ def review_to_sarif(review: dict, surface_uri: str = "capability-surface.json") 
             }
         )
 
-    if decision == "blocked_observation_insufficient":
+    if decision in ("blocked_observation_insufficient", "inconclusive_observation_gap"):
         rid, level, sev, short = _COVERAGE_RULE
         used_rule_ids[rid] = _COVERAGE_RULE
+        if decision == "blocked_observation_insufficient":
+            cov_text = (
+                "Release not certified: observation coverage was insufficient, so the "
+                "absence of new capability cannot be trusted. See the review for detail."
+            )
+        else:
+            cov_text = (
+                "Release not certified: a relevant surface was not observed, so the absence of new "
+                "capability there cannot be trusted (inconclusive_observation_gap). See the review."
+            )
         results.append(
             {
                 "ruleId": rid,
                 "level": level,
-                "message": {
-                    "text": (
-                        "Release not certified: observation coverage was insufficient, so the "
-                        "absence of new capability cannot be trusted. See the review for detail."
-                    )
-                },
+                "message": {"text": cov_text},
                 "partialFingerprints": {"plimsollFinding": _fingerprint(review_id, "coverage", "")},
                 "locations": [
                     {
