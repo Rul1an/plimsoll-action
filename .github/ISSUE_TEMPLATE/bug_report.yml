@@ -1,0 +1,32 @@
+name: Bug report
+description: Something in the action did not behave as documented
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you run, what did you expect, what did you get?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow snippet
+      description: The relevant `uses: Rul1an/plimsoll-action@...` step and inputs (redact secrets).
+      render: yaml
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Action version / ref
+      placeholder: "v1, or a commit SHA"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / review output
+      description: Job log lines, the review summary, or the SARIF if relevant (redact anything private).
+      render: shell

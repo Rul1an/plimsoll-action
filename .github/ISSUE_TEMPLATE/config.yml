@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and feedback
+    url: https://github.com/Rul1an/plimsoll-action/discussions
+    about: Ask how to use it, or tell us what a release review should catch. Start here.
+  - name: Try it / share a review
+    url: https://github.com/Rul1an/plimsoll-action/discussions/categories/show-and-tell
+    about: Ran it on a real agent release? We would love to see what it caught.
+  - name: Report a security issue privately
+    url: https://github.com/Rul1an/plimsoll-action/security/advisories/new
+    about: Please do not open a public issue for vulnerabilities.

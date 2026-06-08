@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a capability for the release-review action
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to review or gate that the action does not handle yet?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: A rough shape of the input, output, or policy you would want.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Capability diff / policy
+        - Coverage honesty
+        - SARIF / code scanning
+        - PR comment / summary
+        - Capture (surface producers)
+        - Hosted layer (audit, fleet, approvals)
+        - Other
