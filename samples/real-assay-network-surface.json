@@ -1,0 +1,23 @@
+{
+  "schema": "assay.runner.capability_surface.v0",
+  "run_id": "r7live2",
+  "_source": "captured live on the assay eBPF runner: assay runner-spike run --kernel-capture against a real TCP connect; observation_health is the actual assay.runner.observation_health.v0 output merged in for Plimsoll's single-surface form",
+  "filesystem_paths": ["/tmp"],
+  "network_endpoints": ["1.1.1.1:53"],
+  "process_execs": [],
+  "mcp_tools": [],
+  "policy_decisions": [],
+  "observation_health": {
+    "schema": "assay.runner.observation_health.v0",
+    "run_id": "r7live2",
+    "platform": "linux",
+    "kernel_layer": "complete",
+    "ringbuf_drops": 0,
+    "policy_layer": "absent",
+    "sdk_layer": "absent",
+    "cgroup_correlation": "clean",
+    "network_protocol_coverage": "connect_only",
+    "network_endpoint_claim_scope": "diagnostic_only",
+    "notes": ["s2_kernel_capture: monitor_events=2 ringbuf_drops=0 network_protocol_coverage=connect_only network_endpoint_claim_scope=diagnostic_only"]
+  }
+}

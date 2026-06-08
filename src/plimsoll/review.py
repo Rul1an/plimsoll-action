@@ -300,10 +300,19 @@ def build_review(before_path, after_path, before, after, policy, require_coverag
     # It does not hard-block; it falls through to human review.
     lossy = require_coverage and ("degraded" in (cov_before, cov_after))
 
+    # Fail-closed absence claim: auto-clear asserts "no new capability" on every surface, which
+    # only holds for surfaces actually observed. If a relevant surface was unobserved (e.g.
+    # network), a no-diff run is inconclusive, not a clean pass: we did not look, so cannot certify.
+    # Coverage-honesty default, independent of the strict gate; never reads "saw nothing" as a pass
+    # when it was really "did not look".
+    absence_gap_surfaces = sorted(cls for cls, st in surf_after.items() if st != "sufficient")
+
     if coverage_blocked:
         decision = "blocked_observation_insufficient"
     elif f or lossy:
         decision = "pending"
+    elif require_coverage and absence_gap_surfaces:
+        decision = "inconclusive_observation_gap"
     else:
         decision = "auto_clear_no_new_capability"
 
@@ -487,10 +496,19 @@ def _review_md(path: str, r: dict) -> None:
     if r["findings_requiring_approval"]:
         lines.append("## Requires approval before this release ships\n")
         for f in r["findings_requiring_approval"]:
-            lines.append(f"- **{f['kind']}**: `{f['item']}` — {f['reason']}")
+            lines.append(f"- **{f['kind']}**: `{f['item']}` ({f['reason']})")
         lines.append("")
+        lines.append("Decision: PENDING. A reviewer approves or rejects (see `plimsoll decide`).")
+    elif r["decision"] == "inconclusive_observation_gap":
+        gaps = ", ".join(
+            cls
+            for cls, st in (r.get("coverage_surfaces", {}).get("after", {}) or {}).items()
+            if st != "sufficient"
+        )
         lines.append(
-            "Decision: PENDING — a reviewer must approve or reject (see `plimsoll decide`)."
+            "Decision: INCONCLUSIVE. No new capability was found, but a relevant surface "
+            f"({gaps or 'see warnings'}) was not observed well enough to certify it. Improve "
+            "observation of that surface, or have a reviewer decide."
         )
     elif r["decision"] == "auto_clear_no_new_capability":
         lines.append("No new capability outside policy. Decision: auto-clear (no approval needed).")
