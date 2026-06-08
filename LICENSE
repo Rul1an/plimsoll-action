@@ -1,0 +1,22 @@
+Plimsoll — Proprietary License
+
+Copyright (c) 2026 Roel Schuurkes. All rights reserved.
+
+This software, its source code, and accompanying materials (the "Software") are
+proprietary and confidential. No license, right, or permission is granted to any
+party to use, copy, modify, merge, publish, distribute, sublicense, or sell the
+Software, in whole or in part, except under a separate written agreement signed
+by the copyright holder.
+
+Unauthorized copying, distribution, or use of the Software, via any medium, is
+strictly prohibited.
+
+The Software is provided "AS IS", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability, fitness
+for a particular purpose, and noninfringement. In no event shall the copyright
+holder be liable for any claim, damages, or other liability arising from, out of,
+or in connection with the Software or its use.
+
+Plimsoll is built on assay (https://github.com/Rul1an/assay). assay is licensed
+separately under its own terms; this license covers only the Plimsoll review layer
+in this repository.

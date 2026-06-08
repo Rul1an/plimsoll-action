@@ -1,0 +1,194 @@
+name: "Plimsoll: agent release review"
+description: "Review what an AI agent release changed at runtime (files, network, MCP tools) between two releases, gate the PR, and report findings in code scanning. For AI platform and security teams."
+author: "Plimsoll"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  before:
+    description: "Path to the previous release's capability surface (JSON or assay runner .tar.gz)."
+    required: true
+  after:
+    description: "Path to the new release's capability surface (JSON or assay runner .tar.gz)."
+    required: true
+  policy:
+    description: "Optional path to a review policy YAML."
+    required: false
+    default: ""
+  workspace:
+    description: "Newline-separated extra in-policy workspace path prefixes."
+    required: false
+    default: ""
+  require-coverage:
+    description: "Block the review when observation coverage is insufficient (recommended)."
+    required: false
+    default: "true"
+  fail-on:
+    description: "Gate level: 'pending' (fail on pending or blocked, default), 'blocked' (fail only when coverage blocks), or 'never'."
+    required: false
+    default: "pending"
+  comment:
+    description: "Post/update a sticky review comment on the pull request."
+    required: false
+    default: "true"
+  sarif:
+    description: "Emit SARIF and upload it to code scanning (needs security-events: write; on private repos this needs GitHub Advanced Security)."
+    required: false
+    default: "true"
+  out-dir:
+    description: "Directory for the review outputs."
+    required: false
+    default: "plimsoll-out"
+  license:
+    description: "Plimsoll hosted-layer token. Leave empty for the free per-repo review. A token enables the hosted audit ledger, fleet aggregation and governed approvals (requires a Plimsoll account; see docs/GITHUB-ACTION.md)."
+    required: false
+    default: ""
+  endpoint:
+    description: "Plimsoll hosted-layer endpoint (used only when 'license' is set)."
+    required: false
+    default: ""
+
+outputs:
+  decision:
+    description: "The review decision: auto_clear_no_new_capability | pending | blocked_observation_insufficient."
+    value: ${{ steps.review.outputs.decision }}
+  findings:
+    description: "Number of capabilities requiring approval."
+    value: ${{ steps.review.outputs.findings }}
+  review-id:
+    description: "Content-addressed review id."
+    value: ${{ steps.review.outputs.review_id }}
+  review-json:
+    description: "Path to the review.json."
+    value: ${{ steps.review.outputs.review_json }}
+  sarif:
+    description: "Path to the emitted SARIF (empty if disabled)."
+    value: ${{ steps.review.outputs.sarif }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Plimsoll (free, from this action)
+      shell: bash
+      run: python3 -m pip install --quiet "$GITHUB_ACTION_PATH"
+
+    - name: Review release capability
+      id: review
+      shell: bash
+      env:
+        IN_BEFORE: ${{ inputs.before }}
+        IN_AFTER: ${{ inputs.after }}
+        IN_POLICY: ${{ inputs.policy }}
+        IN_WORKSPACE: ${{ inputs.workspace }}
+        IN_REQUIRE_COVERAGE: ${{ inputs.require-coverage }}
+        IN_SARIF: ${{ inputs.sarif }}
+        OUT: ${{ inputs.out-dir }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$OUT"
+        args=(diff --before "$IN_BEFORE" --after "$IN_AFTER" --out-dir "$OUT")
+        [ -n "$IN_POLICY" ] && args+=(--policy "$IN_POLICY")
+        if [ "$IN_REQUIRE_COVERAGE" != "true" ]; then args+=(--no-require-coverage); fi
+        while IFS= read -r ws; do [ -n "$ws" ] && args+=(--workspace "$ws"); done <<< "$IN_WORKSPACE"
+        plimsoll "${args[@]}"
+        python3 - "$OUT/review.json" >> "$GITHUB_OUTPUT" <<'PY'
+        import json, sys
+        r = json.load(open(sys.argv[1]))
+        print(f"decision={r['decision']}")
+        print(f"findings={len(r.get('findings_requiring_approval', []))}")
+        print(f"review_id={r.get('review_id','')}")
+        print(f"review_json={sys.argv[1]}")
+        PY
+        if [ "$IN_SARIF" = "true" ]; then
+          plimsoll sarif --review "$OUT/review.json" --out "$OUT/plimsoll.sarif" >/dev/null
+          echo "sarif=$OUT/plimsoll.sarif" >> "$GITHUB_OUTPUT"
+        else
+          echo "sarif=" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Job summary
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -f "${{ inputs.out-dir }}/review.md" ]; then
+          cat "${{ inputs.out-dir }}/review.md" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Sticky PR comment
+      if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+        OUT: ${{ inputs.out-dir }}
+      run: |
+        set -euo pipefail
+        marker="<!-- plimsoll-release-review -->"
+        body="$marker"$'\n'"$(cat "$OUT/review.md")"
+        id=$(gh api "repos/$REPO/issues/$PR/comments" --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1 || true)
+        if [ -n "${id:-}" ]; then
+          gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" >/dev/null
+        else
+          gh api -X POST "repos/$REPO/issues/$PR/comments" -f body="$body" >/dev/null
+        fi
+
+    - name: Upload SARIF to code scanning
+      if: ${{ inputs.sarif == 'true' }}
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        OUT: ${{ inputs.out-dir }}
+      run: |
+        set -euo pipefail
+        # Dependency-free SARIF upload via the code-scanning API (needs security-events: write;
+        # on private repos this needs GitHub Advanced Security). continue-on-error so the gate still
+        # runs where code scanning is unavailable; the SARIF file is always produced for artifacting.
+        sha="${{ github.event.pull_request.head.sha || github.sha }}"
+        ref="${{ github.event.pull_request.head.ref && format('refs/heads/{0}', github.event.pull_request.head.ref) || github.ref }}"
+        payload=$(gzip -c "$OUT/plimsoll.sarif" | base64 -w0)
+        gh api -X POST "repos/$REPO/code-scanning/sarifs" \
+          -f commit_sha="$sha" -f ref="$ref" -f sarif="$payload" >/dev/null \
+          && echo "SARIF uploaded to code scanning." \
+          || echo "::notice::SARIF upload skipped (code scanning not available on this repo). SARIF file is at $OUT/plimsoll.sarif."
+
+    - name: Hosted layer (maximum use)
+      shell: bash
+      env:
+        LICENSE: ${{ inputs.license }}
+        ENDPOINT: ${{ inputs.endpoint }}
+      run: |
+        set -euo pipefail
+        if [ -z "$LICENSE" ]; then
+          {
+            echo ""
+            echo "---"
+            echo "_Free per-repo review. The hosted layer (cross-repo audit ledger, fleet view, governed approvals) is available with a Plimsoll account; see docs/GITHUB-ACTION.md._"
+          } >> "$GITHUB_STEP_SUMMARY"
+        else
+          # Preview: the hosted service is not yet generally available. With a token set, a future
+          # release pushes this review to the ledger at ENDPOINT. For now we only acknowledge it.
+          echo "::notice::Plimsoll hosted layer token detected; hosted push is a preview and not yet enabled."
+        fi
+
+    - name: Gate
+      shell: bash
+      env:
+        DECISION: ${{ steps.review.outputs.decision }}
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        set -euo pipefail
+        echo "decision=$DECISION fail-on=$FAIL_ON"
+        case "$FAIL_ON" in
+          never) exit 0 ;;
+          blocked)
+            [ "$DECISION" = "blocked_observation_insufficient" ] && { echo "::error::release blocked: observation coverage insufficient"; exit 1; } || exit 0 ;;
+          pending|*)
+            case "$DECISION" in
+              auto_clear_no_new_capability) exit 0 ;;
+              *) echo "::error::release needs review (decision=$DECISION)"; exit 1 ;;
+            esac ;;
+        esac

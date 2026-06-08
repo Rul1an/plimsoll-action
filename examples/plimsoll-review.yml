@@ -1,0 +1,37 @@
+# Example: review what an agent release's runtime capability changed, on every PR.
+# Copy into .github/workflows/ in your repo. Pin the action to a commit SHA before relying on it.
+name: Plimsoll release review
+
+on:
+  pull_request:
+
+# Least privilege: read the code, write the PR comment, write code-scanning results. Nothing else.
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # pin to SHA in production
+
+      # You bring two capability surfaces: the previous release and this one. They come from assay
+      # (kernel-observed) or any producer of the {fs,net,tools,procs} shape. Capturing them needs the
+      # assay runner (eBPF), so this step is usually a self-hosted runner or an artifact download;
+      # the review below runs anywhere.
+      #
+      # - name: Get surfaces
+      #   run: ./scripts/capture-or-download-surfaces.sh   # produces before.json and after.json
+
+      - name: Plimsoll review
+        uses: Rul1an/plimsoll-action@v1 # pin to SHA in production
+        with:
+          before: before.json
+          after: after.json
+          fail-on: pending        # fail the check until a human approves new capability
+          # workspace: |          # extra in-policy path prefixes
+          #   /workspace
+          #   /tmp/agent
+          # license: ${{ secrets.PLIMSOLL_TOKEN }}   # only for the hosted layer (maximum use)

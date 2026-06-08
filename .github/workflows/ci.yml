@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --quiet --upgrade pip ruff
+          python -m pip install --quiet .
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Test
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Action smoke (self-test the bundled CLI)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/s
+          cat > /tmp/s/a.json <<'JSON'
+          {"schema":"assay.runner.capability_surface.v0","filesystem_paths":["/workspace/x"],"network_endpoints":[],"process_execs":[],"mcp_tools":["t"],"observation_health":{"kernel_layer":"complete","network_protocol_coverage":"connect_only"}}
+          JSON
+          cat > /tmp/s/b.json <<'JSON'
+          {"schema":"assay.runner.capability_surface.v0","filesystem_paths":["/workspace/x"],"network_endpoints":["evil.example:443"],"process_execs":[],"mcp_tools":["t"],"observation_health":{"kernel_layer":"complete","network_protocol_coverage":"connect_only"}}
+          JSON
+          plimsoll diff --before /tmp/s/a.json --after /tmp/s/b.json --workspace /workspace --out-dir /tmp/s/out
+          plimsoll sarif --review /tmp/s/out/review.json --out /tmp/s/out/plimsoll.sarif
+          python -c "import json; r=json.load(open('/tmp/s/out/review.json')); assert r['decision']=='pending', r['decision']; assert len(r['findings_requiring_approval'])>=1; print('smoke ok:', r['decision'])"
