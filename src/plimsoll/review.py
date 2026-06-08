@@ -173,16 +173,33 @@ def _network_coverage(h: dict) -> str:
     return "unknown"
 
 
+def _tools_coverage(h: dict, base: str) -> str:
+    """MCP tools are captured by the policy/decision layer, NOT the kernel: the assay runner records
+    `mcp_tools` from `assay.tool.decision` events and reports `observation_health.policy_layer`. So
+    a kernel-only run observes no tools, and certifying 'no new tool' off the kernel signal would
+    over-claim (the same honesty trap R7 fixed for network). Gate tools on `policy_layer`: `present`
+    means the tool layer was observed (sufficient); `absent` means it was not (insufficient, so
+    tool-set drift like a rug-pull cannot be ruled out). When the signal is missing entirely
+    (non-assay/legacy inputs that carry no policy_layer field) fall back to the base signal."""
+    pl = h.get("policy_layer")
+    if pl == "present":
+        return "sufficient"
+    if pl == "absent":
+        return "insufficient"
+    return base
+
+
 def coverage_by_surface(surface: dict) -> dict:
-    """Per-surface observation sufficiency. filesystem/processes/tools ride the kernel signal;
-    network is gated separately, so an unobserved network layer is not read as 'no egress'.
+    """Per-surface observation sufficiency. filesystem/processes ride the kernel signal; tools ride
+    the policy/decision layer and network its own signal, so an unobserved tool or network layer is
+    not read as 'no new tool' / 'no egress'.
     """
     base = coverage_status(surface)
     h = surface.get("observation_health") or {}
     return {
         "filesystem": base,
         "processes": base,
-        "tools": base,
+        "tools": _tools_coverage(h, base),
         "network": _network_coverage(h),
     }
 
