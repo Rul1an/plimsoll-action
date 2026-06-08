@@ -137,5 +137,44 @@ class ReviewIntegrationTest(unittest.TestCase):
         self.assertIn("github-token", secret_results[0]["message"]["text"])
 
 
+class RedactionReceiptTest(unittest.TestCase):
+    def test_redacted_placeholder_is_not_flagged(self):
+        # A value already redacted at capture must not be re-flagged (the placeholder text
+        # "<redacted:github-token:...>" would otherwise trip the credential-assignment rule).
+        surface = {"process_execs": ["deploy --token <redacted:github-token:ab12cd34>"]}
+        self.assertEqual(scan_surface(surface), [])
+
+    def _surface_with_redaction(self, redaction):
+        s = _surface([])
+        s["observation_health"]["redaction"] = redaction
+        return s
+
+    def test_build_review_surfaces_redaction_receipt(self):
+        red = {
+            "mode": "shape_and_flag",
+            "redacted_count": 2,
+            "by_rule": {"github-token": 2},
+            "key_scope": "host_local",
+            "key_id": "hmac-sha256:8f3a91c2",
+        }
+        with tempfile.TemporaryDirectory() as d:
+            sa = self._surface_with_redaction(red)
+            sb = self._surface_with_redaction(red)
+            a, b = _write(d, "a.json", sa), _write(d, "b.json", sb)
+            r = build_review(a, b, sa, sb, default_policy(), True)
+            self.assertTrue(r["redaction"])
+            self.assertEqual(r["redaction"][0]["key_id"], "hmac-sha256:8f3a91c2")
+            self.assertTrue(any("redacted at capture" in w for w in r["warnings"]))
+
+    def test_build_review_warns_when_redaction_disabled(self):
+        red = {"mode": "disabled_unsafe", "redacted_count": 0, "key_scope": "ephemeral"}
+        with tempfile.TemporaryDirectory() as d:
+            sa = self._surface_with_redaction(red)
+            sb = self._surface_with_redaction(red)
+            a, b = _write(d, "a.json", sa), _write(d, "b.json", sb)
+            r = build_review(a, b, sa, sb, default_policy(), True)
+            self.assertTrue(any("redaction was disabled" in w for w in r["warnings"]))
+
+
 if __name__ == "__main__":
     unittest.main()

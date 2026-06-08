@@ -31,6 +31,13 @@ _RULES = [
     ),
     ("bearer-token", re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]{20,}=*")),
     (
+        "sensitive-query-param",
+        re.compile(
+            r"(?i)\b(?:access[_-]?token|refresh[_-]?token|sig|signature)="
+            r"[^&\s#\"']{6,}"
+        ),
+    ),
+    (
         "credential-assignment",
         re.compile(
             r"(?i)\b(?:api[_-]?key|secret|token|password|passwd|access[_-]?key|client[_-]?secret)\b"
@@ -42,6 +49,11 @@ _RULES = [
 # The recorded value fields of assay.runner.capability_surface.v0.
 _SURFACE_FIELDS = ("filesystem_paths", "network_endpoints", "process_execs", "mcp_tools")
 
+# A placeholder left by the runner's capture-side redaction (ADR-034): <redacted:RULE:H8>. Stripped
+# before scanning so an already-redacted value is not re-flagged (the placeholder's "token:<hex>"
+# text would otherwise trip the credential-assignment rule).
+_REDACTED_PLACEHOLDER = re.compile(r"<redacted:[a-z-]+:[0-9a-f]{8}>")
+
 
 def scan_surface(surface: dict) -> list:
     """Return possible-secret hits in a capability surface. Each hit is {field, rule, matched_len};
@@ -50,7 +62,7 @@ def scan_surface(surface: dict) -> list:
     seen = set()
     for field in _SURFACE_FIELDS:
         for value in surface.get(field, []) or []:
-            text = str(value)
+            text = _REDACTED_PLACEHOLDER.sub(" ", str(value))
             for name, pattern in _RULES:
                 m = pattern.search(text)
                 if m:
