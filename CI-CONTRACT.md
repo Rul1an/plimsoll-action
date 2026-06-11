@@ -275,7 +275,18 @@ Proposed required context groups:
 - Sanitization guard.
 - Fork pull request contract.
 
-Exact names: to be filled from a live implementation PR.
+Observed from the CI baseline implementation PR `#12`:
+
+- `lint-and-test`
+- `Public Artifact Sanitization`
+
+Proposed required context names for the next branch-protection review:
+
+- `lint-and-test`
+- `Public Artifact Sanitization`
+
+External advisory checks should not be added as required contexts unless the
+repository owner explicitly accepts their availability as a merge dependency.
 
 ## 7. Target Workflow Files
 
