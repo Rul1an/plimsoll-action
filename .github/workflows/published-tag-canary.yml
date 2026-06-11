@@ -1,0 +1,69 @@
+name: Published Tag Canary
+
+on:
+  schedule:
+    - cron: "29 6 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plimsoll-action-v1:
+    name: plimsoll-action@v1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout consumer repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Harden runner observe
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Create clean capability fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p canary
+          cat > canary/before.json <<'JSON'
+          {"schema":"assay.runner.capability_surface.v0","filesystem_paths":["/workspace/x"],"network_endpoints":[],"process_execs":[],"mcp_tools":["t"],"observation_health":{"kernel_layer":"complete","network_protocol_coverage":"connect_only"}}
+          JSON
+          cp canary/before.json canary/after.json
+
+      - name: Run published action canary
+        id: canary
+        uses: Rul1an/plimsoll-action@v1 # zizmor: ignore[unpinned-uses] intentionally validates the floating public major tag
+        with:
+          before: canary/before.json
+          after: canary/after.json
+          comment: false
+          sarif: true
+          fail-on: pending
+          out-dir: plimsoll-canary-out
+
+      - name: Assert published action outputs
+        shell: bash
+        env:
+          DECISION: ${{ steps.canary.outputs.decision }}
+          FINDINGS: ${{ steps.canary.outputs.findings }}
+          REVIEW_ID: ${{ steps.canary.outputs.review-id }}
+          REVIEW_JSON: ${{ steps.canary.outputs.review-json }}
+          SARIF: ${{ steps.canary.outputs.sarif }}
+        run: |
+          set -euo pipefail
+          test "$DECISION" = "auto_clear_no_new_capability"
+          test "$FINDINGS" = "0"
+          test -n "$REVIEW_ID"
+          test -f "$REVIEW_JSON"
+          test -f "$SARIF"
+          python3 -m json.tool "$REVIEW_JSON" >/dev/null
+          python3 -m json.tool "$SARIF" >/dev/null
