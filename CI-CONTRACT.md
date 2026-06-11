@@ -191,6 +191,16 @@ pull requests.
 
 - Weekly canary against the current floating major tag,
   `Rul1an/plimsoll-action@v1`.
+- The published-tag canary intentionally references the floating public major
+  tag for the action under test. That is the only unpinned action reference in
+  the workflow; checkout, Harden-Runner, and all scaffold actions remain pinned
+  to commit SHAs.
+- The canary is scheduled/manual and advisory only. It must not be added to
+  branch protection or rulesets without a separate context-capture review.
+- The first canary uses a clean no-diff capability fixture, asserts the
+  `auto_clear_no_new_capability` decision, and validates the emitted review JSON
+  and SARIF files. Ubuntu-only is the initial support claim until cross-platform
+  published-action usage is intentionally added.
 - OpenSSF Scorecard for public supply-chain posture. The first implementation
   uses the default `GITHUB_TOKEN`, which can read repository rulesets but may
   not fully measure classic branch-protection or webhook settings unless a
