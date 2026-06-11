@@ -126,6 +126,9 @@ Required-gate split:
   scheduled checks where the private source is available.
 - A degraded fork run must say which private comparison was skipped without
   exposing the private list.
+- The trusted hashed-list layer is part of the sanitizer workflow, not a
+  separate required context, until a future context-capture/import review says
+  otherwise.
 
 Logging contract:
 
