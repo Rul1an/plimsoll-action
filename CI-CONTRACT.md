@@ -112,8 +112,8 @@ must not be printed in CI logs.
 
 Acceptable implementation patterns:
 
-- Compare normalized tokens or n-grams against hashed entries supplied from a
-  private source.
+- Compare normalized tokens or n-grams against HMAC-SHA256 entries supplied from
+  a private source plus a separate private HMAC key.
 - Run the plaintext sensitive-list check only in trusted private contexts where
   logs are not public and untrusted pull request code cannot read the list.
 - On fork pull requests, run only the public-safe portion of the check.
@@ -122,24 +122,25 @@ Required-gate split:
 
 - The public-safe structural portion is the required PR gate on every PR,
   including forks.
-- The private hashed-list comparison runs only in trusted same-repo contexts and
-  scheduled checks where the private source is available.
+- The private HMAC-list comparison runs only in trusted same-repo contexts and
+  scheduled checks where the private source and HMAC key are available.
 - A degraded fork run must say which private comparison was skipped without
   exposing the private list.
-- The trusted hashed-list layer is part of the sanitizer workflow, not a
+- The trusted HMAC-list layer is part of the sanitizer workflow, not a
   separate required context, until a future context-capture/import review says
   otherwise.
 - The trusted list must enumerate every spelling, casing, and spacing variant of
-  a term. Normalization lowercases, splits on non-alphanumerics, and hashes
+  a term. Normalization lowercases, splits on non-alphanumerics, and HMACs
   one-to-five-token windows per line, so a compound spelling and a spaced or
-  hyphenated spelling of the same term produce different hashes. Variant
+  hyphenated spelling of the same term produce different digests. Variant
   completeness is a property of the trusted list, not the scanner.
 
 Logging contract:
 
 - Report only counts and locations, for example `3 matches in README.md:42`.
 - Never print the matched text.
-- Never print the sensitive term, phrase, or the unhashed denylist entry.
+- Never print the sensitive term, phrase, unhashed denylist entry, digest, or
+  HMAC key.
 - Treat printing the matched term as a CI bug and a sanitization failure.
 
 Scope:
