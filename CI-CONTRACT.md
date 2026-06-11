@@ -191,13 +191,23 @@ pull requests.
 
 - Weekly canary against the current floating major tag,
   `Rul1an/plimsoll-action@v1`.
-- OpenSSF Scorecard for public supply-chain posture.
-- OSV-Scanner for Python dependencies and GitHub Actions.
+- OpenSSF Scorecard for public supply-chain posture. The first implementation
+  uses the default `GITHUB_TOKEN`, which can read repository rulesets but may
+  not fully measure classic branch-protection or webhook settings unless a
+  future read/admin token is intentionally added.
+- OSV-Scanner is deferred until the repository carries a resolved dependency
+  input such as `uv.lock`, `requirements*.txt`, or another lockfile. A lone
+  `pyproject.toml` should not produce a green-but-empty advisory scan.
 - CodeQL or equivalent code scanning for Python and workflow glue.
 - Harden-Runner in observe mode on the scheduled canary job to learn egress and
   process behavior before any enforcement mode is considered.
 - Dependabot maintenance check that ensures dependency PRs still run the same
   required checks as ordinary PRs.
+
+Scheduled supply-chain posture workflows are advisory only. They run on a
+weekly cadence plus manual dispatch, do not run on ordinary pull requests, and
+must not be promoted to required contexts without a separate context-capture
+review.
 
 ## 3. Release-Only Checks
 
