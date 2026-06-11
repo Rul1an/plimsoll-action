@@ -285,6 +285,9 @@ Proposed required context names for the next branch-protection review:
 - `lint-and-test`
 - `Public Artifact Sanitization`
 
+Checked-in ruleset activation lives at
+`.github/rulesets/main-required-ci-contexts.json`.
+
 External advisory checks should not be added as required contexts unless the
 repository owner explicitly accepts their availability as a merge dependency.
 
