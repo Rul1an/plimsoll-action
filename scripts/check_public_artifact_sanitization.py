@@ -193,11 +193,10 @@ def print_findings(findings: Sequence[Finding]) -> None:
 def self_test() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        (root / "README.md").write_text(
-            "hello\nREDACT_BEFORE_PUBLIC: placeholder\n", encoding="utf-8"
-        )
+        marker = "".join(("REDACT", "_BEFORE_PUBLIC"))
+        (root / "README.md").write_text(f"hello\n{marker}: placeholder\n", encoding="utf-8")
         (root / "dist").mkdir()
-        (root / "dist" / "generated.txt").write_text("REDACT_BEFORE_PUBLIC\n", encoding="utf-8")
+        (root / "dist" / "generated.txt").write_text(f"{marker}\n", encoding="utf-8")
         findings = scan_files([root / "README.md", root / "dist" / "generated.txt"], root)
         assert len(findings) == 1
         assert findings[0].path == Path("README.md")
