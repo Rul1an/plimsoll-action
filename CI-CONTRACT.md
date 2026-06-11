@@ -285,6 +285,15 @@ Proposed required context names for the next branch-protection review:
 - `lint-and-test`
 - `Public Artifact Sanitization`
 
+Checked-in ruleset activation lives at
+`.github/rulesets/main-required-ci-contexts.json`.
+
+Import note: the checked-in ruleset is config-as-code only until imported in
+GitHub settings. Add `bypass_actors` only if the repository owner intentionally
+wants to preserve an admin bypass path; otherwise
+`strict_required_status_checks_policy: true` means merges must be rebased-current
+and green.
+
 External advisory checks should not be added as required contexts unless the
 repository owner explicitly accepts their availability as a merge dependency.
 
