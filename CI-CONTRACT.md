@@ -33,6 +33,10 @@ Repository state observed on 2026-06-11:
   and gates on the review decision.
 - Python package: `pyproject.toml`, package name `plimsoll`, Python `>=3.10`,
   dependency `pyyaml>=6.0`, dev tooling `pytest`, `ruff`, and `mypy`.
+- Package provenance note: the repository carries the package it installs from
+  the action checkout. If this ever becomes a vendored copy rather than the
+  product package itself, CI must record the source version and sync mechanism so
+  the action package cannot drift silently from the product.
 - Tests: coverage-surface, rules parity, SARIF, and value-free secret detection
   tests.
 - Fixtures/samples: `samples/real-assay-network-surface.json`,
@@ -114,6 +118,15 @@ Acceptable implementation patterns:
   logs are not public and untrusted pull request code cannot read the list.
 - On fork pull requests, run only the public-safe portion of the check.
 
+Required-gate split:
+
+- The public-safe structural portion is the required PR gate on every PR,
+  including forks.
+- The private hashed-list comparison runs only in trusted same-repo contexts and
+  scheduled checks where the private source is available.
+- A degraded fork run must say which private comparison was skipped without
+  exposing the private list.
+
 Logging contract:
 
 - Report only counts and locations, for example `3 matches in README.md:42`.
@@ -125,6 +138,10 @@ Scope:
 
 - Public docs, README, examples, workflow files, `action.yml`, Python source,
   tests, samples, and generated public artifacts if later workflows create them.
+
+This guard is a backstop, not a guarantee. Human public-artifact sanitization
+review remains primary because fixed matchers can miss variants, spacing,
+morphology, and context.
 
 ### Fork Pull Request Contract
 
