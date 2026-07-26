@@ -21,10 +21,11 @@ import tempfile
 import time
 
 # Anchored at start (the lines are stripped before matching) so .search() does not retry every
-# position, and CONNECT drops the \s* that overlapped (.+); the leading space is removed by the
-# existing .strip() on the capture. Removes the polynomial-ReDoS backtracking CodeQL flagged.
+# position. CONNECT requires a token separator and makes the captured endpoint start non-space;
+# the adjacent repetitions therefore cannot consume the same bytes. Removes the
+# polynomial-ReDoS backtracking CodeQL flagged without accepting connect-prefixed words.
 OPENAT = re.compile(r"^\[PID (\d+)\] openat: (.+)$")
-CONNECT = re.compile(r"^\[PID (\d+)\] connect:?(.+)$")
+CONNECT = re.compile(r"^\[PID (\d+)\] connect:?\s+(\S.*)$")
 
 
 def main(argv=None):
