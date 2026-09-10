@@ -15,15 +15,44 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
-from plimsoll.review import build_review, default_policy  # noqa: E402
+from plimsoll.render_safety import SECRET_RE  # noqa: E402
+from plimsoll.review import _review_md, build_review, default_policy  # noqa: E402
 from plimsoll.sarif import review_to_sarif  # noqa: E402
-from plimsoll.secrets import scan_surface, secret_warnings  # noqa: E402
+from plimsoll.secrets import _RULES, compiled_rule, scan_surface, secret_warnings  # noqa: E402
 
 # Assembled at runtime; never a whole-token literal in source.
 GH = "gh" + "p_" + ("0123456789abcdef" * 2) + "0123"  # github-token shape, 40 chars after prefix
 GH2 = "gh" + "p_" + ("z" * 36)  # a second, distinct github-token shape
+# Stateless GitHub App installation token: ghs_<app id>_<JWT>, ~520 chars, two dots, may end in "-".
+GHS = (
+    "gh"
+    + "s"
+    + "_"
+    + "1234567"
+    + "_"
+    + "ey"
+    + "JhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
+    + "."
+    + "ey"
+    + "J"
+    + "QmFzZTY0VXJs" * 28
+    + "."
+    + "c2lnbmF0dXJl_x" * 9
+    + "Zz-"
+)
 AWS = "AK" + "IA" + "IOSFODNN7" + "EXAMPLE"  # aws-access-key-id shape (AKIA + 16)
 PW = "--pass" + "word=" + "hunter2" + "supersecret"  # credential-assignment shape
+_WINDOW = 12
+
+
+def _github_token_rule():
+    return next(rx for name, rx in _RULES if name == "github-token")
+
+
+def _assert_no_token_window(test, text, token=GHS, n=_WINDOW):
+    """Fail if any n-character slice of token appears in text."""
+    for i in range(len(token) - n + 1):
+        test.assertNotIn(token[i : i + n], text, f"token window at offset {i} leaked into output")
 
 
 class ScanSurfaceTest(unittest.TestCase):
@@ -83,6 +112,36 @@ class ScanSurfaceTest(unittest.TestCase):
         self.assertIn("redact it at capture", warns[0])
         self.assertNotIn(GH, warns[0])
 
+    def test_stateless_installation_token_is_github_token_and_fully_consumed(self):
+        # ghs_<app>_<JWT> must hit github-token (not jwt: "_eyJ" has no word boundary before eyJ)
+        # and consume the trailing "-" so a redactor cannot leave a 12-char window behind.
+        self.assertGreaterEqual(len(GHS), 500)
+        self.assertEqual(GHS.count("."), 2)
+        self.assertTrue(GHS.endswith("-"))
+
+        m = _github_token_rule().search(GHS)
+        self.assertIsNotNone(m)
+        self.assertEqual(m.group(0), GHS)
+        self.assertTrue(m.group(0).endswith("-"))
+
+        leak = f"gh api --hostname api.github.com --token {GHS}"
+        surface = {"process_execs": [leak]}
+        hits = scan_surface(surface)
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["rule"], "github-token")
+        self.assertEqual(hits[0]["matched_len"], len(GHS))
+        _assert_no_token_window(self, json.dumps(hits))
+
+        warns = secret_warnings(surface)
+        self.assertEqual(len(warns), 1)
+        self.assertIn("github-token", warns[0])
+        _assert_no_token_window(self, warns[0])
+
+        redacted = _github_token_rule().sub("<redacted:github-token>", leak)
+        self.assertIn("github-token", redacted)
+        _assert_no_token_window(self, redacted)
+        self.assertFalse(redacted.endswith("-"))
+
 
 def _surface(execs):
     return {
@@ -117,6 +176,32 @@ class ReviewIntegrationTest(unittest.TestCase):
             self.assertNotIn(GH, json.dumps(r["possible_secrets"]))
             secret_warns = [w for w in r["warnings"] if "redact it at capture" in w]
             self.assertNotIn(GH, json.dumps(secret_warns))
+
+    def test_stateless_installation_token_is_reported_value_free_through_review_and_sarif(self):
+        leak = f"deploy --token {GHS}"
+        with tempfile.TemporaryDirectory() as d:
+            sa, sb = _surface([]), _surface([leak])
+            a, b = _write(d, "a.json", sa), _write(d, "b.json", sb)
+            r = build_review(a, b, sa, sb, default_policy(), True)
+            self.assertEqual(len(r["possible_secrets"]), 1)
+            self.assertEqual(r["possible_secrets"][0]["rule"], "github-token")
+            self.assertEqual(r["possible_secrets"][0]["matched_len"], len(GHS))
+            _assert_no_token_window(self, json.dumps(r["possible_secrets"]))
+            secret_warns = [w for w in r["warnings"] if "redact it at capture" in w]
+            self.assertTrue(secret_warns)
+            self.assertTrue(all("github-token" in w for w in secret_warns))
+            _assert_no_token_window(self, json.dumps(secret_warns))
+
+            doc = review_to_sarif(r)
+            dumped = json.dumps(doc)
+            secret_results = [
+                res
+                for res in doc["runs"][0]["results"]
+                if res["ruleId"] == "PLIMSOLL-POSSIBLE-SECRET"
+            ]
+            self.assertEqual(len(secret_results), 1)
+            self.assertIn("github-token", secret_results[0]["message"]["text"])
+            _assert_no_token_window(self, dumped)
 
     def test_sarif_emits_value_free_secret_result_and_rule(self):
         review = {
@@ -174,6 +259,69 @@ class RedactionReceiptTest(unittest.TestCase):
             a, b = _write(d, "a.json", sa), _write(d, "b.json", sb)
             r = build_review(a, b, sa, sb, default_policy(), True)
             self.assertTrue(any("redaction was disabled" in w for w in r["warnings"]))
+
+
+def _classic_ghs_token():
+    """Pre-JWT installation-token shape: ghs_ plus 36 alphanumerics."""
+    return "gh" + "s_" + ("A" * 36)
+
+
+def _review_with_token_in_public_fields(token):
+    """Hostile review: the token sits in warning and finding fields the public sinks render."""
+    return {
+        "schema": "assay.product.evidence_review.v1",
+        "review_id": "sha256:abc",
+        "before_evidence": {"digest": "sha256:before"},
+        "after_evidence": {"digest": "sha256:after"},
+        "coverage": {"before": "sufficient", "after": "sufficient"},
+        "coverage_surfaces": {"after": {}},
+        "decision": "pending",
+        "diff": {
+            "filesystem_paths": {"added": [], "removed": []},
+            "network_endpoints": {"added": [], "removed": []},
+            "mcp_tools": {"added": [], "removed": []},
+            "process_execs": {"added": [], "removed": []},
+        },
+        "warnings": [f"advisory text carrying {token}"],
+        "findings_requiring_approval": [
+            {
+                "kind": "process",
+                "item": f"curl --header {token}",
+                "reason": f"new process carrying {token}",
+            }
+        ],
+        "possible_secrets": [],
+    }
+
+
+class RenderSinkGithubTokenTest(unittest.TestCase):
+    """The public markdown/SARIF sinks must redact github-token shapes, not only ghp_."""
+
+    def test_renderer_secret_re_is_the_shared_github_token_rule(self):
+        # No second hand-written copy: the sink redacts with the compiled rule object.
+        self.assertIs(SECRET_RE, compiled_rule("github-token"))
+        self.assertEqual(SECRET_RE.pattern, compiled_rule("github-token").pattern)
+
+    def _assert_public_sinks_redact(self, token):
+        review = _review_with_token_in_public_fields(token)
+        with tempfile.TemporaryDirectory() as d:
+            md_path = os.path.join(d, "review.md")
+            _review_md(md_path, review)
+            md = pathlib.Path(md_path).read_text()
+        sarif = review_to_sarif(review)
+        _assert_no_token_window(self, md, token)
+        _assert_no_token_window(self, json.dumps(sarif), token)
+        self.assertIn("redacted:secret:", md)
+        self.assertIn("redacted:secret:", json.dumps(sarif))
+
+    def test_public_render_path_redacts_classic_and_stateless_ghs_tokens(self):
+        classic = _classic_ghs_token()
+        self.assertGreaterEqual(len(GHS), 500)
+        self.assertEqual(GHS.count("."), 2)
+        self.assertTrue(GHS.endswith("-"))
+        for label, token in (("classic_ghs", classic), ("stateless_ghs", GHS)):
+            with self.subTest(token=label):
+                self._assert_public_sinks_redact(token)
 
 
 if __name__ == "__main__":

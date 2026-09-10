@@ -9,6 +9,8 @@ visible in the Security tab rather than silently passing.
 
 import hashlib
 
+from .render_safety import safe_render_text
+
 SARIF_VERSION = "2.1.0"
 SARIF_SCHEMA = (
     "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"  # noqa: E501
@@ -94,7 +96,7 @@ def review_to_sarif(review: dict, surface_uri: str = "capability-surface.json") 
             {
                 "ruleId": rule_id,
                 "level": level,
-                "message": {"text": f"{f.get('reason', short)}: {item}"},
+                "message": {"text": safe_render_text(f"{f.get('reason', short)}: {item}")},
                 "partialFingerprints": {"plimsollFinding": _fingerprint(review_id, kind, item)},
                 "locations": [
                     {
@@ -146,7 +148,7 @@ def review_to_sarif(review: dict, surface_uri: str = "capability-surface.json") 
                 "ruleId": _SECRET_RULE_ID,
                 "level": "warning",
                 "message": {
-                    "text": (
+                    "text": safe_render_text(
                         f"possible secret in a recorded {field} value (looks like {rule_name}); "
                         "evidence should not carry credentials, redact it at capture"
                     )

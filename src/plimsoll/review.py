@@ -32,6 +32,7 @@ import os
 import sys
 import tarfile
 
+from plimsoll.render_safety import safe_render_text
 from plimsoll.secrets import scan_surface
 
 FIELDS = [
@@ -551,18 +552,21 @@ def _review_md(path: str, r: dict) -> None:
         )
     lines += ["## What changed\n", "| capability | added | removed |", "| --- | --- | --- |"]
     for key, label in FIELDS:
-        a = ", ".join(r["diff"][key]["added"]) or "-"
-        rem = ", ".join(r["diff"][key]["removed"]) or "-"
+        a = ", ".join(safe_render_text(item) for item in r["diff"][key]["added"]) or "-"
+        rem = ", ".join(safe_render_text(item) for item in r["diff"][key]["removed"]) or "-"
         lines.append(f"| {label} | {a} | {rem} |")
     lines.append("")
     if r["warnings"]:
         lines.append("## Warnings\n")
-        lines += [f"- {w}" for w in r["warnings"]]
+        lines += [f"- {safe_render_text(w)}" for w in r["warnings"]]
         lines.append("")
     if r["findings_requiring_approval"]:
         lines.append("## Requires approval before this release ships\n")
         for f in r["findings_requiring_approval"]:
-            lines.append(f"- **{f['kind']}**: `{f['item']}` ({f['reason']})")
+            kind = safe_render_text(f["kind"])
+            item = safe_render_text(f["item"])
+            reason = safe_render_text(f["reason"])
+            lines.append(f"- **{kind}**: `{item}` ({reason})")
         lines.append("")
         lines.append("Decision: PENDING. A reviewer approves or rejects (see `plimsoll decide`).")
     elif r["decision"] == "inconclusive_observation_gap":

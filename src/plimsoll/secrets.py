@@ -19,7 +19,7 @@ import re
 # legitimately high-entropy in evidence and would be noisy). Add entropy behind an opt-in if needed.
 _RULES = [
     ("aws-access-key-id", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
-    ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
+    ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9._-]{36,}")),
     ("openai-key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b")),
     ("slack-token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
     ("google-api-key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
@@ -53,6 +53,14 @@ _SURFACE_FIELDS = ("filesystem_paths", "network_endpoints", "process_execs", "mc
 # before scanning so an already-redacted value is not re-flagged (the placeholder's "token:<hex>"
 # text would otherwise trip the credential-assignment rule).
 _REDACTED_PLACEHOLDER = re.compile(r"<redacted:[a-z-]+:[0-9a-f]{8}>")
+
+
+def compiled_rule(name: str):
+    """Return the compiled pattern for a named rule. The render sink uses this object directly."""
+    for rule_name, pattern in _RULES:
+        if rule_name == name:
+            return pattern
+    raise KeyError(name)
 
 
 def scan_surface(surface: dict) -> list:
