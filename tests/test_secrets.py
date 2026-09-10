@@ -15,9 +15,10 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
-from plimsoll.review import build_review, default_policy  # noqa: E402
+from plimsoll.render_safety import SECRET_RE  # noqa: E402
+from plimsoll.review import _review_md, build_review, default_policy  # noqa: E402
 from plimsoll.sarif import review_to_sarif  # noqa: E402
-from plimsoll.secrets import _RULES, scan_surface, secret_warnings  # noqa: E402
+from plimsoll.secrets import _RULES, compiled_rule, scan_surface, secret_warnings  # noqa: E402
 
 # Assembled at runtime; never a whole-token literal in source.
 GH = "gh" + "p_" + ("0123456789abcdef" * 2) + "0123"  # github-token shape, 40 chars after prefix
@@ -258,6 +259,69 @@ class RedactionReceiptTest(unittest.TestCase):
             a, b = _write(d, "a.json", sa), _write(d, "b.json", sb)
             r = build_review(a, b, sa, sb, default_policy(), True)
             self.assertTrue(any("redaction was disabled" in w for w in r["warnings"]))
+
+
+def _classic_ghs_token():
+    """Pre-JWT installation-token shape: ghs_ plus 36 alphanumerics."""
+    return "gh" + "s_" + ("A" * 36)
+
+
+def _review_with_token_in_public_fields(token):
+    """Hostile review: the token sits in warning and finding fields the public sinks render."""
+    return {
+        "schema": "assay.product.evidence_review.v1",
+        "review_id": "sha256:abc",
+        "before_evidence": {"digest": "sha256:before"},
+        "after_evidence": {"digest": "sha256:after"},
+        "coverage": {"before": "sufficient", "after": "sufficient"},
+        "coverage_surfaces": {"after": {}},
+        "decision": "pending",
+        "diff": {
+            "filesystem_paths": {"added": [], "removed": []},
+            "network_endpoints": {"added": [], "removed": []},
+            "mcp_tools": {"added": [], "removed": []},
+            "process_execs": {"added": [], "removed": []},
+        },
+        "warnings": [f"advisory text carrying {token}"],
+        "findings_requiring_approval": [
+            {
+                "kind": "process",
+                "item": f"curl --header {token}",
+                "reason": f"new process carrying {token}",
+            }
+        ],
+        "possible_secrets": [],
+    }
+
+
+class RenderSinkGithubTokenTest(unittest.TestCase):
+    """The public markdown/SARIF sinks must redact github-token shapes, not only ghp_."""
+
+    def test_renderer_secret_re_is_the_shared_github_token_rule(self):
+        # No second hand-written copy: the sink redacts with the compiled rule object.
+        self.assertIs(SECRET_RE, compiled_rule("github-token"))
+        self.assertEqual(SECRET_RE.pattern, compiled_rule("github-token").pattern)
+
+    def _assert_public_sinks_redact(self, token):
+        review = _review_with_token_in_public_fields(token)
+        with tempfile.TemporaryDirectory() as d:
+            md_path = os.path.join(d, "review.md")
+            _review_md(md_path, review)
+            md = pathlib.Path(md_path).read_text()
+        sarif = review_to_sarif(review)
+        _assert_no_token_window(self, md, token)
+        _assert_no_token_window(self, json.dumps(sarif), token)
+        self.assertIn("redacted:secret:", md)
+        self.assertIn("redacted:secret:", json.dumps(sarif))
+
+    def test_public_render_path_redacts_classic_and_stateless_ghs_tokens(self):
+        classic = _classic_ghs_token()
+        self.assertGreaterEqual(len(GHS), 500)
+        self.assertEqual(GHS.count("."), 2)
+        self.assertTrue(GHS.endswith("-"))
+        for label, token in (("classic_ghs", classic), ("stateless_ghs", GHS)):
+            with self.subTest(token=label):
+                self._assert_public_sinks_redact(token)
 
 
 if __name__ == "__main__":

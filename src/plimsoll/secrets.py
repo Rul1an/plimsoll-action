@@ -55,6 +55,14 @@ _SURFACE_FIELDS = ("filesystem_paths", "network_endpoints", "process_execs", "mc
 _REDACTED_PLACEHOLDER = re.compile(r"<redacted:[a-z-]+:[0-9a-f]{8}>")
 
 
+def compiled_rule(name: str):
+    """Return the compiled pattern for a named rule. The render sink uses this object directly."""
+    for rule_name, pattern in _RULES:
+        if rule_name == name:
+            return pattern
+    raise KeyError(name)
+
+
 def scan_surface(surface: dict) -> list:
     """Return possible-secret hits in a capability surface. Each hit is {field, rule, matched_len};
     the matched value is never included, so consuming this does not re-leak the secret."""
