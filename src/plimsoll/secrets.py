@@ -19,7 +19,7 @@ import re
 # legitimately high-entropy in evidence and would be noisy). Add entropy behind an opt-in if needed.
 _RULES = [
     ("aws-access-key-id", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
-    ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
+    ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9._-]{36,}")),
     ("openai-key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b")),
     ("slack-token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
     ("google-api-key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
