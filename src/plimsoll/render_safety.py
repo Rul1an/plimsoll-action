@@ -6,9 +6,10 @@ import hashlib
 
 from .secrets import compiled_rule
 
-# One definition: the github-token arm is the compiled rule from secrets.py, not a copy.
-# A hand-written ghp_-only regex here would miss classic ghs_ and ghs_<app id>_<JWT>.
+# Each arm is the compiled rule from secrets.py, not a copy.
+# github-token does not match github_pat_ (third character is "t", not in [pousr]).
 SECRET_RE = compiled_rule("github-token")
+_RENDER_RULE_NAMES = ("github-token", "github-fine-grained-pat")
 
 
 def _short_hash(value: str) -> str:
@@ -16,5 +17,12 @@ def _short_hash(value: str) -> str:
 
 
 def safe_render_text(value) -> str:
-    """Redact github-token shapes before a public sink. Does not mutate review.json."""
-    return SECRET_RE.sub(lambda m: f"<redacted:secret:{_short_hash(m.group())}>", str(value))
+    """Redact github-token and github-fine-grained-pat shapes before a public sink."""
+
+    def _redact(match):
+        return f"<redacted:secret:{_short_hash(match.group())}>"
+
+    text = str(value)
+    for name in _RENDER_RULE_NAMES:
+        text = compiled_rule(name).sub(_redact, text)
+    return text
