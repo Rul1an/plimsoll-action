@@ -43,7 +43,7 @@ Repository state observed on 2026-06-11:
   `tests/fixtures/secret-rules.v1.json`, and action example workflow.
 - Tracked hygiene issue: `.pyc` and `__pycache__` files are currently tracked
   under `src/` and `tests/`.
-- Tags: floating `v1` and patch tags `v1.1.0` through `v1.1.4`.
+- Tags: floating `v1` and patch tags `v1.1.0` through `v1.1.6`.
 - Existing release artifact surface: no bundled binary, wheel, sdist, container,
   or other release artifact is currently shipped by this repository. The action
   installs the package from the action checkout at runtime.
