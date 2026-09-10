@@ -7,6 +7,7 @@ The fixtures are synthetic secret SHAPES, assembled from fragments at import tim
 token literal is ever committed to the source. That keeps repo secret scanners (and our own check)
 from flagging the test file, while the detector still sees a fully-formed token at runtime."""
 
+import inspect
 import json
 import os
 import pathlib
@@ -40,6 +41,8 @@ GHS = (
     + "c2lnbmF0dXJl_x" * 9
     + "Zz-"
 )
+# Fine-grained PAT: github_pat_ + 22 + "_" + 59 = 93 chars. No keyword/header/query in the source.
+PAT = "git" + "hub" + "_pat_" + "11ABCDEFG0123456789abc" + "_" + "Zz9" * 19 + "Yy"
 AWS = "AK" + "IA" + "IOSFODNN7" + "EXAMPLE"  # aws-access-key-id shape (AKIA + 16)
 PW = "--pass" + "word=" + "hunter2" + "supersecret"  # credential-assignment shape
 _WINDOW = 12
@@ -142,6 +145,32 @@ class ScanSurfaceTest(unittest.TestCase):
         _assert_no_token_window(self, redacted)
         self.assertFalse(redacted.endswith("-"))
 
+    def test_fine_grained_pat_without_keyword_context_is_detected(self):
+        # github_pat_ + 22 + "_" + 59. No bearer/token=/query context: only this rule hits.
+        self.assertEqual(len(PAT), 93)
+        self.assertTrue(PAT.startswith("git" + "hub" + "_pat_"))
+
+        path = f"/tmp/{PAT}.txt"
+        surface = {
+            "filesystem_paths": [path],
+            "process_execs": [PAT],
+            "network_endpoints": [],
+            "mcp_tools": [],
+        }
+        hits = scan_surface(surface)
+        self.assertEqual(len(hits), 2)
+        self.assertEqual({h["field"] for h in hits}, {"filesystem_paths", "process_execs"})
+        for hit in hits:
+            self.assertEqual(hit["rule"], "github-fine-grained-pat")
+            self.assertEqual(hit["matched_len"], len(PAT))
+            self.assertEqual(set(hit.keys()), {"field", "rule", "matched_len"})
+        _assert_no_token_window(self, json.dumps(hits), PAT)
+
+        warns = secret_warnings(surface)
+        self.assertEqual(len(warns), 2)
+        self.assertTrue(all("github-fine-grained-pat" in w for w in warns))
+        _assert_no_token_window(self, json.dumps(warns), PAT)
+
 
 def _surface(execs):
     return {
@@ -202,6 +231,35 @@ class ReviewIntegrationTest(unittest.TestCase):
             self.assertEqual(len(secret_results), 1)
             self.assertIn("github-token", secret_results[0]["message"]["text"])
             _assert_no_token_window(self, dumped)
+
+    def test_fine_grained_pat_is_reported_value_free_through_review_and_sarif(self):
+        path = f"/tmp/{PAT}.txt"
+        with tempfile.TemporaryDirectory() as d:
+            sa = _surface([])
+            sb = {**_surface([PAT]), "filesystem_paths": ["/workspace/a", path]}
+            a, b = _write(d, "a.json", sa), _write(d, "b.json", sb)
+            r = build_review(a, b, sa, sb, default_policy(), True)
+            rules = {h["rule"] for h in r["possible_secrets"]}
+            self.assertIn("github-fine-grained-pat", rules)
+            self.assertTrue(all(h["matched_len"] == len(PAT) for h in r["possible_secrets"]))
+            _assert_no_token_window(self, json.dumps(r["possible_secrets"]), PAT)
+            secret_warns = [w for w in r["warnings"] if "redact it at capture" in w]
+            self.assertTrue(secret_warns)
+            self.assertTrue(all("github-fine-grained-pat" in w for w in secret_warns))
+            _assert_no_token_window(self, json.dumps(secret_warns), PAT)
+
+            doc = review_to_sarif(r)
+            dumped = json.dumps(doc)
+            secret_results = [
+                res
+                for res in doc["runs"][0]["results"]
+                if res["ruleId"] == "PLIMSOLL-POSSIBLE-SECRET"
+            ]
+            self.assertGreaterEqual(len(secret_results), 1)
+            self.assertTrue(
+                any("github-fine-grained-pat" in res["message"]["text"] for res in secret_results)
+            )
+            _assert_no_token_window(self, dumped, PAT)
 
     def test_sarif_emits_value_free_secret_result_and_rule(self):
         review = {
@@ -322,6 +380,23 @@ class RenderSinkGithubTokenTest(unittest.TestCase):
         for label, token in (("classic_ghs", classic), ("stateless_ghs", GHS)):
             with self.subTest(token=label):
                 self._assert_public_sinks_redact(token)
+
+    def test_renderer_binds_fine_grained_pat_from_rule_table(self):
+        # No second hand-written copy: the sink redacts with the compiled rule object.
+        from plimsoll import render_safety
+
+        self.assertIn("github-fine-grained-pat", render_safety._RENDER_RULE_NAMES)
+        source = inspect.getsource(render_safety.safe_render_text)
+        self.assertIn("compiled_rule", source)
+        self.assertNotIn("re.compile", source)
+        self.assertEqual(
+            compiled_rule("github-fine-grained-pat").pattern,
+            r"\bgithub_pat_[A-Za-z0-9_]{22,}",
+        )
+
+    def test_public_render_path_redacts_fine_grained_pat(self):
+        self.assertEqual(len(PAT), 93)
+        self._assert_public_sinks_redact(PAT)
 
 
 if __name__ == "__main__":
