@@ -24,7 +24,7 @@ plimsoll = "plimsoll.cli:main"
 [dependency-groups]
 dev = [
     "pytest>=8.0",
-    "ruff>=0.16.8",
+    "ruff>=0.16.9",
     "mypy>=1.10",
 ]
 
