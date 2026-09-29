@@ -6,9 +6,27 @@ updates:
       interval: weekly
     commit-message:
       prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: pip
     directory: "/"
     schedule:
       interval: weekly
     commit-message:
       prefix: "deps"
+    ignore:
+      # Dev-only floor in [dependency-groups]; nothing reads it. CI installs
+      # ruff unpinned, and CONTRIBUTING.md never uses the group (#49).
+      - dependency-name: "ruff"
+    groups:
+      pip:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
