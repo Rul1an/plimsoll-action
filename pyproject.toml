@@ -25,7 +25,7 @@ plimsoll = "plimsoll.cli:main"
 dev = [
     "pytest>=8.0",
     "ruff>=0.16.8",
-    "mypy>=2.4.0",
+    "mypy>=2.4.1",
 ]
 
 [tool.hatch.build.targets.wheel]
